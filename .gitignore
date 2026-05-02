@@ -1,0 +1,44 @@
+Set-Content ".gitignore" @"
+# Gradle
+.gradle/
+build/
+gradle-9.4.1/
+*.jar
+
+# IDE - IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# IDE - Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# IDE - VS Code
+.vscode/
+
+# JRE / JDK
+jre/
+jdk/
+
+# External dependencies (managed by Gradle, never commit these)
+lib/
+libs/
+*.class
+
+# Secrets - NEVER commit
+application.properties
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+"@

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commit Diff Analyzer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #f9f9f8; --surface: #ffffff; --border: #e2e0d8; --text: #1a1a18; --text-muted: #6b6960; --text-hint: #9e9b92; --accent: #2d6a4f; --accent-light: #eaf3de; --danger: #993C1D; --danger-light: #FAECE7; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 720px; margin: 0 auto; }
+  header { margin-bottom: 2rem; }
+  header h1 { font-size: 22px; font-weight: 600; }
+  header p { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+  .platform-toggle { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .platform-btn { flex: 1; height: 44px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-muted); transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .active-github { border-color: #24292f !important; background: #24292f !important; color: #fff !important; }
+  .active-bitbucket { border-color: #0052cc !important; background: #0052cc !important; color: #fff !important; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.75rem; }
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 5px; }
+  input { width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; }
+  input:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .hint { font-size: 12px; color: var(--text-hint); margin-top: 4px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn { width: 100%; height: 42px; margin-top: 0.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn:hover { opacity: 0.88; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .status { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-muted); margin-top: 1.25rem; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--text-muted); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box { background: var(--danger-light); border: 1px solid #f0997b; border-radius: 8px; padding: 0.75rem 1rem; font-size: 13px; color: var(--danger); margin-top: 1rem; line-height: 1.5; }
+  .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 1.5rem; }
+  .result-header { padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+  .badge { font-size: 12px; font-weight: 600; padding: 5px 14px; border-radius: 20px; }
+  .badge-func { background: var(--danger-light); color: var(--danger); }
+  .badge-nonfunc { background: var(--accent-light); color: var(--accent); }
+  .confidence { font-size: 13px; color: var(--text-muted); }
+  .result-body { padding: 1.25rem 1.5rem; }
+  .reason { font-size: 14px; line-height: 1.6; margin-bottom: 1rem; }
+  .changes-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .changes-list li { font-size: 13px; color: var(--text-muted); padding-left: 1rem; position: relative; }
+  .changes-list li::before { content: '&mdash;'; position: absolute; left: 0; color: var(--text-hint); }
+  details { margin-top: 1rem; }
+  summary { font-size: 12px; color: var(--text-hint); cursor: pointer; }
+  .diff-preview { margin-top: 0.5rem; background: #f4f3f0; border-radius: 8px; padding: 0.75rem 1rem; font-family: 'Courier New', monospace; font-size: 11.5px; color: var(--text-muted); max-height: 240px; overflow-y: auto; white-space: pre; overflow-x: auto; line-height: 1.5; }
+  .diff-add { color: #2d6a4f; } .diff-remove { color: #993C1D; } .diff-hdr { color: #185FA5; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Commit Diff Analyzer</h1>
+    <p>Select a platform, enter two commits, and get an instant functional vs non-functional verdict.</p>
+  </header>
+  <div class="platform-toggle">
+    <button class="platform-btn active-github" id="btn-github" onclick="setPlatform('github')">GitHub</button>
+    <button class="platform-btn" id="btn-bitbucket" onclick="setPlatform('bitbucket')">Bitbucket Server</button>
+  </div>
+  <div id="github-fields">
+    <div class="card">
+      <div class="section-label">GitHub Repository</div>
+      <div class="row">
+        <div class="field"><label>Owner (username or org)</label><input id="gh-owner" type="text" placeholder="e.g. microsoft" /></div>
+        <div class="field"><label>Repository name</label><input id="gh-repo" type="text" placeholder="e.g. vscode" /></div>
+      </div>
+      <p class="hint" style="margin-top:8px;">From: github.com/{owner}/{repo}</p>
+    </div>
+  </div>
+  <div id="bitbucket-fields" class="hidden">
+    <div class="card">
+      <div class="section-label">Bitbucket Server</div>
+      <div class="field"><label>Base URL</label><input id="bb-host" type="text" placeholder="https://your-bitbucket-server.com" /></div>
+      <div class="row">
+        <div class="field"><label>Project key</label><input id="bb-project" type="text" placeholder="e.g. CASA" /><p class="hint">All-caps key from the URL</p></div>
+        <div class="field"><label>Repository slug</label><input id="bb-repo" type="text" placeholder="e.g. cartavis" /></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-label">Commits to compare</div>
+    <div class="row">
+      <div class="field"><label>Commit A - older</label><input id="commitA" type="text" placeholder="e.g. a1b2c3d" /></div>
+      <div class="field"><label>Commit B - newer</label><input id="commitB" type="text" placeholder="e.g. e4f5g6h" /></div>
+    </div>
+  </div>
+  <button class="btn" id="analyzeBtn" onclick="analyze()">Analyze commits</button>
+  <div id="statusEl"></div>
+  <div id="errorEl"></div>
+  <div id="resultEl"></div>
+</div>
+<script>
+let currentPlatform = 'github';
+window.onload = async () => {
+  try { const res = await fetch('/api/default-host'); if (res.ok) document.getElementById('bb-host').value = await res.text(); } catch {}
+};
+function setPlatform(p) {
+  currentPlatform = p;
+  document.getElementById('github-fields').classList.toggle('hidden', p !== 'github');
+  document.getElementById('bitbucket-fields').classList.toggle('hidden', p !== 'bitbucket');
+  document.getElementById('btn-github').className = 'platform-btn' + (p === 'github' ? ' active-github' : '');
+  document.getElementById('btn-bitbucket').className = 'platform-btn' + (p === 'bitbucket' ? ' active-bitbucket' : '');
+}
+async function analyze() {
+  const commitA = document.getElementById('commitA').value.trim();
+  const commitB = document.getElementById('commitB').value.trim();
+  const btn = document.getElementById('analyzeBtn');
+  const statusEl = document.getElementById('statusEl');
+  const errorEl = document.getElementById('errorEl');
+  const resultEl = document.getElementById('resultEl');
+  errorEl.innerHTML = ''; resultEl.innerHTML = '';
+  let payload = { platform: currentPlatform, commitA, commitB };
+  if (currentPlatform === 'github') {
+    payload.owner = document.getElementById('gh-owner').value.trim();
+    payload.repo = document.getElementById('gh-repo').value.trim();
+    if (!payload.owner || !payload.repo || !commitA || !commitB) { errorEl.innerHTML = '<div class="error-box">Please fill in owner, repo, and both commit hashes.</div>'; return; }
+  } else {
+    payload.host = document.getElementById('bb-host').value.trim();
+    payload.project = document.getElementById('bb-project').value.trim();
+    payload.repo = document.getElementById('bb-repo').value.trim();
+    if (!payload.host || !payload.project || !payload.repo || !commitA || !commitB) { errorEl.innerHTML = '<div class="error-box">Please fill in all Bitbucket fields and both commit hashes.</div>'; return; }
+  }
+  btn.disabled = true;
+  statusEl.innerHTML = '<div class="status"><span class="spinner"></span> Fetching diff and analyzing with AI...</div>';
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.error) { errorEl.innerHTML = '<div class="error-box"><strong>Error:</strong> ' + data.error + '</div>'; statusEl.innerHTML = ''; btn.disabled = false; return; }
+    const isFunctional = data.verdict === 'FUNCTIONAL';
+    const badgeClass = isFunctional ? 'badge-func' : 'badge-nonfunc';
+    const badgeLabel = isFunctional ? 'Functional' : 'Non-functional';
+    const keyChanges = data.keyChanges || [];
+    const preview = colorize(data.rawDiffPreview || '');
+    resultEl.innerHTML = '<div class="result-card"><div class="result-header"><span class="badge ' + badgeClass + '">' + badgeLabel + '</span><span class="confidence">' + data.confidence + ' confidence</span></div><div class="result-body"><p class="reason">' + data.reason + '</p>' + (keyChanges.length ? '<ul class="changes-list">' + keyChanges.map(k => '<li>' + k + '</li>').join('') + '</ul>' : '') + (preview ? '<details><summary>Show raw diff preview</summary><div class="diff-preview">' + preview + '</div></details>' : '') + '</div></div>';
+    statusEl.innerHTML = '';
+  } catch (e) {
+    errorEl.innerHTML = '<div class="error-box"><strong>Request failed:</strong> ' + e.message + '</div>';
+    statusEl.innerHTML = '';
+  }
+  btn.disabled = false;
+}
+function colorize(diff) {
+  return diff.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').split('\n').map(line => {
+    if (line.startsWith('+')) return '<span class="diff-add">' + line + '</span>';
+    if (line.startsWith('-')) return '<span class="diff-remove">' + line + '</span>';
+    if (line.startsWith('@@') || line.startsWith('---') || line.startsWith('+++')) return '<span class="diff-hdr">' + line + '</span>';
+    return line;
+  }).join('\n');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+server.port=8080
+ai.api.key=YOUR_API_KEY_HERE
+ai.api.url=https://api.groq.com/openai/v1/chat/completions
+ai.model=llama3-70b-8192
+bitbucket.default.host=YOUR_BITBUCKET_SERVER_URL
+bitbucket.token=
+github.token=
